@@ -15,6 +15,7 @@
   - Configurable connection limits per host
   - Optimized TCP parameters
 - **Production Ready** - Comprehensive error handling, structured logging, resource management
+- **Docker Support** - Multi-stage builds, optimized images (15MB), production-ready compose
 
 ## 🏛️ Architecture
 
@@ -39,6 +40,30 @@ Designed with performance-critical patterns for high-load scenarios:
 
 ## 🚀 Installation
 
+### Docker (Recommended)
+
+```bash
+# Using Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Or using Docker CLI
+docker run -d \
+  --name 4ebur-net \
+  -p 8080:8080 \
+  -e MAX_IDLE_CONNS=2000 \
+  --restart unless-stopped \
+  onixus/4ebur-net:latest
+```
+
+**Docker images:**
+- `onixus/4ebur-net:latest` - Minimal scratch-based (~15MB)
+- `onixus/4ebur-net:alpine` - Alpine-based with shell tools (~25MB)
+
+📚 [Complete Docker documentation](docker/README.md)
+
 ### From source
 
 ```bash
@@ -51,12 +76,6 @@ go build -o 4ebur-net cmd/proxy/main.go
 
 ```bash
 go install github.com/onixus/4ebur-net/cmd/proxy@latest
-```
-
-### Docker (coming soon)
-
-```bash
-docker run -p 8080:8080 onixus/4ebur-net
 ```
 
 ## 💡 Usage
@@ -125,6 +144,18 @@ MAX_CONNS_PER_HOST=200 \
 ./4ebur-net
 ```
 
+**Docker example:**
+
+```bash
+docker run -d \
+  -p 3128:3128 \
+  -e PROXY_PORT=3128 \
+  -e MAX_IDLE_CONNS=5000 \
+  -e MAX_IDLE_CONNS_PER_HOST=500 \
+  -e MAX_CONNS_PER_HOST=500 \
+  onixus/4ebur-net:latest
+```
+
 ## 📊 Performance Tuning
 
 ### System-level optimizations
@@ -164,6 +195,8 @@ sysctl -w net.ipv4.tcp_wmem="4096 65536 16777216"
 ```
 
 Make permanent by adding to `/etc/sysctl.conf`
+
+**Docker**: These settings are pre-configured in `docker-compose.yml`
 
 #### 3. Go runtime tuning
 
@@ -208,9 +241,16 @@ curl http://localhost:8080/debug/pprof/
 ├── pkg/
 │   └── pool/
 │       └── buffer.go            # Buffer pool for GC optimization
+├── docker/
+│   └── README.md            # Docker deployment guide
+├── Dockerfile                   # Multi-stage minimal build
+├── Dockerfile.alpine            # Alpine-based alternative
+├── docker-compose.yml           # Production-ready compose
+├── .dockerignore
 ├── go.mod
 ├── go.sum
 ├── README.md
+├── LICENSE
 └── .gitignore
 ```
 
@@ -235,6 +275,7 @@ curl http://localhost:8080/debug/pprof/
 - Comply with local laws and regulations
 - Rotate CA certificates regularly
 - Implement access controls
+- Run containers as non-root (default in our images)
 
 ## 🎯 Use Cases
 
@@ -256,6 +297,7 @@ Tested on: Intel Core i7 (4 cores), 16GB RAM, Ubuntu 22.04
 | Latency overhead | < 5ms |
 | Memory usage | ~200MB (50K connections) |
 | CPU usage | ~30% (4 cores) |
+| Docker image size | 15MB (scratch) / 25MB (alpine) |
 
 ## 🔧 Technical Details
 
@@ -274,6 +316,15 @@ Tested on: Intel Core i7 (4 cores), 16GB RAM, Ubuntu 22.04
 4. **No Compression**: Disabled for maximum throughput (enable if needed)
 5. **HTTP/2**: Automatic protocol upgrade when supported
 6. **Buffer Pooling**: `sync.Pool` reduces GC pressure
+
+### Docker Optimizations
+
+1. **Multi-stage builds**: Minimal final image size
+2. **Scratch-based**: No unnecessary OS components
+3. **Static binary**: No external dependencies
+4. **Non-root user**: Security best practice (UID 65534)
+5. **Health checks**: Built-in container monitoring
+6. **Resource limits**: Configurable CPU/memory constraints
 
 ### Logging
 
@@ -298,21 +349,37 @@ Structured logging with visual indicators:
 - Reduce `MAX_IDLE_CONNS` and `MAX_IDLE_CONNS_PER_HOST`
 - Increase `GOGC` value (e.g., 200 or 300)
 - Monitor with `pprof` heap profiling
+- For Docker: Set memory limits in compose file
 
 ### Connection refused errors
 
 **Check:**
-- Proxy is running: `netstat -tulpn | grep 8080`
+- Proxy is running: `netstat -tulpn | grep 8080` or `docker ps`
 - Firewall rules allow port 8080
 - Correct proxy configuration in client
+- Docker port mapping is correct
 
 ### Slow performance
 
 **Solutions:**
 - Increase connection pool sizes
-- Tune TCP kernel parameters
+- Tune TCP kernel parameters (automatic in docker-compose)
 - Profile with pprof to identify bottlenecks
 - Check network latency with `ping` and `traceroute`
+- Increase Docker container resource limits
+
+### Docker-specific issues
+
+```bash
+# Check container logs
+docker logs -f 4ebur-net
+
+# Check resource usage
+docker stats 4ebur-net
+
+# Restart container
+docker restart 4ebur-net
+```
 
 ## 🤝 Contributing
 
@@ -329,6 +396,7 @@ Contributions are welcome! Please follow these steps:
 - Add tests for new features
 - Update documentation
 - Keep performance in mind (this is a high-load proxy)
+- Test Docker builds before submitting
 
 ## 📝 License
 
@@ -355,7 +423,9 @@ Found a bug or have a question?
 
 ## 🚀 Roadmap
 
-- [ ] Docker container support
+- [x] Docker container support
+- [x] Multi-stage optimized builds
+- [x] Production-ready docker-compose
 - [ ] WebSocket proxying
 - [ ] Request/response modification hooks
 - [ ] Plugin system for custom logic
@@ -364,6 +434,7 @@ Found a bug or have a question?
 - [ ] Metrics export (Prometheus)
 - [ ] gRPC support
 - [ ] Load balancing capabilities
+- [ ] Kubernetes deployment manifests
 
 ---
 
