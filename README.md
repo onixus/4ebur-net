@@ -1,6 +1,7 @@
 # 4ebur-net
 
 [![CI Pipeline](https://github.com/onixus/4ebur-net/workflows/CI%20Pipeline/badge.svg)](https://github.com/onixus/4ebur-net/actions/workflows/ci.yml)
+[![Test Coverage](https://github.com/onixus/4ebur-net/workflows/Test%20Coverage/badge.svg)](https://github.com/onixus/4ebur-net/actions/workflows/coverage.yml)
 [![CodeQL](https://github.com/onixus/4ebur-net/workflows/CodeQL%20Security%20Analysis/badge.svg)](https://github.com/onixus/4ebur-net/actions/workflows/codeql.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/onixus/4ebur-net)](https://goreportcard.com/report/github.com/onixus/4ebur-net)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -24,6 +25,99 @@
 - **Production Ready** - Comprehensive error handling, structured logging, resource management
 - **Docker Support** - Multi-stage builds, optimized images (15MB), production-ready compose
 - **CI/CD Pipeline** - Automated testing, linting, security scanning, and releases
+- **Comprehensive Testing** - Unit tests, benchmarks, race detection, coverage reporting
+
+## 🛠️ Development
+
+### Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/onixus/4ebur-net.git
+cd 4ebur-net
+
+# Install dependencies
+make deps
+
+# Run tests
+make test
+
+# Build
+make build
+
+# Run
+make run
+```
+
+### Available Make Commands
+
+```bash
+make help                  # Show all available commands
+
+make build                 # Build binary
+make build-all            # Build for all platforms
+make test                  # Run tests with race detection
+make test-coverage        # Generate coverage report
+make bench                # Run benchmarks
+make lint                 # Run linters
+make fmt                  # Format code
+
+make docker-build         # Build Docker image
+make docker-build-alpine  # Build Alpine image
+make docker-run           # Run Docker container
+make docker-compose-up    # Start with docker-compose
+
+make clean                # Clean build artifacts
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run specific package tests
+go test -v ./internal/cert/...
+go test -v ./internal/proxy/...
+go test -v ./pkg/pool/...
+
+# Run with coverage
+make test-coverage
+open coverage.html
+
+# Run benchmarks
+make bench
+
+# Run with race detector
+go test -race ./...
+```
+
+### Test Coverage
+
+The project includes comprehensive unit tests for all core components:
+
+- ✅ **Certificate Manager** (`internal/cert/manager_test.go`)
+  - CA generation
+  - Dynamic certificate generation
+  - Certificate caching
+  - Concurrent access
+  - Benchmarks
+
+- ✅ **Proxy Server** (`internal/proxy/server_test.go`)
+  - HTTP proxying
+  - HTTPS CONNECT method
+  - Invalid request handling
+  - Concurrent requests
+  - Performance benchmarks
+
+- ✅ **Buffer Pool** (`pkg/pool/buffer_test.go`)
+  - Buffer allocation/deallocation
+  - Pool reuse
+  - Reset functionality
+  - Concurrent access
+  - Performance comparison
+
+Run `make test-coverage` to generate HTML coverage report.
 
 ## 🏛️ Architecture
 
@@ -77,7 +171,7 @@ docker run -d \
 ```bash
 git clone https://github.com/onixus/4ebur-net.git
 cd 4ebur-net
-go build -o 4ebur-net cmd/proxy/main.go
+make build
 ```
 
 ### Using go install
@@ -171,6 +265,55 @@ docker run -d \
   onixus/4ebur-net:latest
 ```
 
+## 🔧 CI/CD Pipeline
+
+### Automated Workflows
+
+The project includes comprehensive GitHub Actions workflows:
+
+#### CI Pipeline (`ci.yml`)
+Runs on every push and PR:
+- ✅ **Code Quality**: golangci-lint, gofmt, go vet
+- ✅ **Multi-platform Build**: Linux, macOS, Windows (Go 1.21, 1.22)
+- ✅ **Testing**: Unit tests with race detection and coverage
+- ✅ **Security Scanning**: Gosec security analysis
+- ✅ **Docker Build**: Test builds for both scratch and alpine images
+- ✅ **Benchmarks**: Performance regression detection on PRs
+
+#### Test Coverage (`coverage.yml`)
+- ✅ **Coverage Reports**: Automated test coverage analysis
+- ✅ **Codecov Integration**: Coverage tracking and trends
+- ✅ **Coverage Artifacts**: HTML reports for every build
+
+#### Release Pipeline (`release.yml`)
+Triggered on version tags (`v*.*.*`):
+- ✅ **GitHub Releases**: Automated release creation with changelog
+- ✅ **Multi-platform Binaries**: Linux, macOS, Windows (amd64, arm64)
+- ✅ **Docker Images**: Multi-arch builds (amd64, arm64) pushed to Docker Hub
+- ✅ **Versioning**: Semantic versioning with latest tag
+
+#### Security Analysis (`codeql.yml`)
+- ✅ **CodeQL**: Weekly automated security scans
+- ✅ **Vulnerability Detection**: SARIF reports uploaded to GitHub Security
+
+#### Dependency Management
+- ✅ **Dependabot**: Automated dependency updates for Go, Docker, and GitHub Actions
+- ✅ **Dependency Review**: PR analysis for security vulnerabilities
+
+### Creating a Release
+
+```bash
+# Tag a new version
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+
+# Automated pipeline will:
+# 1. Build binaries for all platforms
+# 2. Create GitHub release with artifacts
+# 3. Build and push Docker images
+# 4. Update Docker Hub description
+```
+
 ## 📊 Performance Tuning
 
 ### System-level optimizations
@@ -241,50 +384,6 @@ go tool pprof http://localhost:1488/debug/pprof/goroutine
 curl http://localhost:1488/debug/pprof/
 ```
 
-## 🔧 CI/CD Pipeline
-
-### Automated Workflows
-
-The project includes comprehensive GitHub Actions workflows:
-
-#### CI Pipeline (`ci.yml`)
-Runs on every push and PR:
-- **Code Quality**: golangci-lint, gofmt, go vet
-- **Multi-platform Build**: Linux, macOS, Windows (Go 1.21, 1.22)
-- **Testing**: Unit tests with race detection and coverage
-- **Security Scanning**: Gosec security analysis
-- **Docker Build**: Test builds for both scratch and alpine images
-- **Benchmarks**: Performance regression detection on PRs
-
-#### Release Pipeline (`release.yml`)
-Triggered on version tags (`v*.*.*`):
-- **GitHub Releases**: Automated release creation with changelog
-- **Multi-platform Binaries**: Linux, macOS, Windows (amd64, arm64)
-- **Docker Images**: Multi-arch builds (amd64, arm64) pushed to Docker Hub
-- **Versioning**: Semantic versioning with latest tag
-
-#### Security Analysis (`codeql.yml`)
-- **CodeQL**: Weekly automated security scans
-- **Vulnerability Detection**: SARIF reports uploaded to GitHub Security
-
-#### Dependency Management
-- **Dependabot**: Automated dependency updates for Go, Docker, and GitHub Actions
-- **Dependency Review**: PR analysis for security vulnerabilities
-
-### Creating a Release
-
-```bash
-# Tag a new version
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
-
-# Automated pipeline will:
-# 1. Build binaries for all platforms
-# 2. Create GitHub release with artifacts
-# 3. Build and push Docker images
-# 4. Update Docker Hub description
-```
-
 ## 📁 Project Structure
 
 ```
@@ -292,6 +391,7 @@ git push origin v1.0.0
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                   # CI pipeline
+│   │   ├── coverage.yml             # Test coverage
 │   │   ├── release.yml              # Release automation
 │   │   ├── codeql.yml               # Security analysis
 │   │   └── dependency-review.yml    # Dependency checks
@@ -299,21 +399,28 @@ git push origin v1.0.0
 │   └── PULL_REQUEST_TEMPLATE.md # PR template
 ├── cmd/
 │   └── proxy/
-│       └── main.go              # Application entry point
+│       ├── main.go              # Application entry point
+│       └── main_test.go         # Main tests
 ├── internal/
 │   ├── proxy/
-│   │   └── server.go            # Core proxy server logic
+│   │   ├── server.go            # Core proxy server logic
+│   │   └── server_test.go       # Proxy tests
 │   └── cert/
-│       └── manager.go           # Dynamic certificate generation
+│       ├── manager.go           # Dynamic certificate generation
+│       └── manager_test.go      # Certificate tests
 ├── pkg/
 │   └── pool/
-│       └── buffer.go            # Buffer pool for GC optimization
+│       ├── buffer.go            # Buffer pool for GC optimization
+│       └── buffer_test.go       # Pool tests
 ├── docker/
 │   └── README.md            # Docker deployment guide
 ├── Dockerfile                   # Multi-stage minimal build
 ├── Dockerfile.alpine            # Alpine-based alternative
 ├── docker-compose.yml           # Production-ready compose
+├── Makefile                     # Build automation
 ├── .golangci.yml                # Linter configuration
+├── .gitattributes               # Git attributes
+├── CONTRIBUTING.md              # Contribution guide
 ├── .dockerignore
 ├── go.mod
 ├── go.sum
@@ -456,27 +563,25 @@ docker restart 4ebur-net
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these steps:
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+**Quick steps:**
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+3. Make your changes with tests
+4. Run tests: `make test`
+5. Run linters: `make lint`
+6. Commit: `git commit -m 'feat: add amazing feature'`
+7. Push and open a Pull Request
 
 **Development guidelines:**
 - Follow Go best practices and idioms
-- Add tests for new features
+- Add tests for new features (maintain >80% coverage)
 - Update documentation
 - Keep performance in mind (this is a high-load proxy)
 - Test Docker builds before submitting
 - All PRs must pass CI checks
-
-**Code Quality:**
-- Run `golangci-lint run` before committing
-- Ensure `go fmt` and `go vet` pass
-- Add unit tests with race detection
-- Maintain or improve code coverage
 
 ## 📝 License
 
@@ -509,6 +614,9 @@ Found a bug or have a question?
 - [x] CI/CD pipeline with GitHub Actions
 - [x] Automated security scanning
 - [x] Multi-platform releases
+- [x] Comprehensive unit tests
+- [x] Test coverage reporting
+- [x] Development automation (Makefile)
 - [ ] WebSocket proxying
 - [ ] Request/response modification hooks
 - [ ] Plugin system for custom logic
