@@ -40,10 +40,10 @@ COPY --from=builder /build/4ebur-net /4ebur-net
 USER 65534:65534
 
 # Открываем порт прокси
-EXPOSE 8080
+EXPOSE 1488
 
 # Устанавливаем переменные окружения по умолчанию
-ENV PROXY_PORT=8080 \
+ENV PROXY_PORT=1488 \
     MAX_IDLE_CONNS=1000 \
     MAX_IDLE_CONNS_PER_HOST=100 \
     MAX_CONNS_PER_HOST=100 \

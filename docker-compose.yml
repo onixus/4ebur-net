@@ -10,10 +10,10 @@ services:
     restart: unless-stopped
     
     ports:
-      - "8080:8080"  # HTTP/HTTPS proxy port
+      - "1488:1488"  # HTTP/HTTPS proxy port
     
     environment:
-      - PROXY_PORT=8080
+      - PROXY_PORT=1488
       - MAX_IDLE_CONNS=2000
       - MAX_IDLE_CONNS_PER_HOST=200
       - MAX_CONNS_PER_HOST=200
