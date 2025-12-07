@@ -1,5 +1,12 @@
 # 4ebur-net
 
+[![CI Pipeline](https://github.com/onixus/4ebur-net/workflows/CI%20Pipeline/badge.svg)](https://github.com/onixus/4ebur-net/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/onixus/4ebur-net/workflows/CodeQL%20Security%20Analysis/badge.svg)](https://github.com/onixus/4ebur-net/actions/workflows/codeql.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/onixus/4ebur-net)](https://goreportcard.com/report/github.com/onixus/4ebur-net)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker Pulls](https://img.shields.io/docker/pulls/onixus/4ebur-net)](https://hub.docker.com/r/onixus/4ebur-net)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/onixus/4ebur-net)](https://go.dev/)
+
 🚀 **High-performance MITM forward proxy server** written in Go with TLS termination support.
 
 > Built for high-load production environments with critical performance optimizations
@@ -16,6 +23,7 @@
   - Optimized TCP parameters
 - **Production Ready** - Comprehensive error handling, structured logging, resource management
 - **Docker Support** - Multi-stage builds, optimized images (15MB), production-ready compose
+- **CI/CD Pipeline** - Automated testing, linting, security scanning, and releases
 
 ## 🏛️ Architecture
 
@@ -77,6 +85,13 @@ go build -o 4ebur-net cmd/proxy/main.go
 ```bash
 go install github.com/onixus/4ebur-net/cmd/proxy@latest
 ```
+
+### Pre-built binaries
+
+Download from [GitHub Releases](https://github.com/onixus/4ebur-net/releases) for:
+- Linux (amd64, arm64)
+- macOS (amd64, arm64)
+- Windows (amd64)
 
 ## 💡 Usage
 
@@ -226,10 +241,62 @@ go tool pprof http://localhost:1488/debug/pprof/goroutine
 curl http://localhost:1488/debug/pprof/
 ```
 
+## 🔧 CI/CD Pipeline
+
+### Automated Workflows
+
+The project includes comprehensive GitHub Actions workflows:
+
+#### CI Pipeline (`ci.yml`)
+Runs on every push and PR:
+- **Code Quality**: golangci-lint, gofmt, go vet
+- **Multi-platform Build**: Linux, macOS, Windows (Go 1.21, 1.22)
+- **Testing**: Unit tests with race detection and coverage
+- **Security Scanning**: Gosec security analysis
+- **Docker Build**: Test builds for both scratch and alpine images
+- **Benchmarks**: Performance regression detection on PRs
+
+#### Release Pipeline (`release.yml`)
+Triggered on version tags (`v*.*.*`):
+- **GitHub Releases**: Automated release creation with changelog
+- **Multi-platform Binaries**: Linux, macOS, Windows (amd64, arm64)
+- **Docker Images**: Multi-arch builds (amd64, arm64) pushed to Docker Hub
+- **Versioning**: Semantic versioning with latest tag
+
+#### Security Analysis (`codeql.yml`)
+- **CodeQL**: Weekly automated security scans
+- **Vulnerability Detection**: SARIF reports uploaded to GitHub Security
+
+#### Dependency Management
+- **Dependabot**: Automated dependency updates for Go, Docker, and GitHub Actions
+- **Dependency Review**: PR analysis for security vulnerabilities
+
+### Creating a Release
+
+```bash
+# Tag a new version
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+
+# Automated pipeline will:
+# 1. Build binaries for all platforms
+# 2. Create GitHub release with artifacts
+# 3. Build and push Docker images
+# 4. Update Docker Hub description
+```
+
 ## 📁 Project Structure
 
 ```
 4ebur-net/
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml                   # CI pipeline
+│   │   ├── release.yml              # Release automation
+│   │   ├── codeql.yml               # Security analysis
+│   │   └── dependency-review.yml    # Dependency checks
+│   ├── dependabot.yml           # Automated updates
+│   └── PULL_REQUEST_TEMPLATE.md # PR template
 ├── cmd/
 │   └── proxy/
 │       └── main.go              # Application entry point
@@ -246,6 +313,7 @@ curl http://localhost:1488/debug/pprof/
 ├── Dockerfile                   # Multi-stage minimal build
 ├── Dockerfile.alpine            # Alpine-based alternative
 ├── docker-compose.yml           # Production-ready compose
+├── .golangci.yml                # Linter configuration
 ├── .dockerignore
 ├── go.mod
 ├── go.sum
@@ -276,6 +344,11 @@ curl http://localhost:1488/debug/pprof/
 - Rotate CA certificates regularly
 - Implement access controls
 - Run containers as non-root (default in our images)
+
+**Security Features:**
+- Automated security scanning with Gosec and CodeQL
+- Dependency vulnerability checking with Dependabot
+- SARIF security reports in GitHub Security tab
 
 ## 🎯 Use Cases
 
@@ -397,6 +470,13 @@ Contributions are welcome! Please follow these steps:
 - Update documentation
 - Keep performance in mind (this is a high-load proxy)
 - Test Docker builds before submitting
+- All PRs must pass CI checks
+
+**Code Quality:**
+- Run `golangci-lint run` before committing
+- Ensure `go fmt` and `go vet` pass
+- Add unit tests with race detection
+- Maintain or improve code coverage
 
 ## 📝 License
 
@@ -426,6 +506,9 @@ Found a bug or have a question?
 - [x] Docker container support
 - [x] Multi-stage optimized builds
 - [x] Production-ready docker-compose
+- [x] CI/CD pipeline with GitHub Actions
+- [x] Automated security scanning
+- [x] Multi-platform releases
 - [ ] WebSocket proxying
 - [ ] Request/response modification hooks
 - [ ] Plugin system for custom logic
