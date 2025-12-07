@@ -10,120 +10,116 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/onixus/4ebur-net/internal/cert"
 	"github.com/onixus/4ebur-net/pkg/pool"
 )
 
-// Server представляет MITM прокси-сервер с оптимизацией для высоких нагрузок
-type Server struct {
-	certManager *cert.Manager
+// ProxyServer is the main MITM proxy server
+type ProxyServer struct {
+	certManager *cert.CertManager
 	transport   *http.Transport
-	bufferPool  *pool.BufferPool
+	mu          sync.RWMutex
 }
 
-// NewProxyServer создает новый прокси-сервер с оптимальными настройками
-func NewProxyServer() (*Server, error) {
-	certManager, err := cert.NewManager()
+// NewProxyServer creates a new proxy server instance
+func NewProxyServer() (*ProxyServer, error) {
+	certMgr, err := cert.NewCertManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cert manager: %w", err)
 	}
 
-	// Читаем настройки из переменных окружения
+	// Get configuration from environment
 	maxIdleConns := getEnvInt("MAX_IDLE_CONNS", 1000)
 	maxIdleConnsPerHost := getEnvInt("MAX_IDLE_CONNS_PER_HOST", 100)
 	maxConnsPerHost := getEnvInt("MAX_CONNS_PER_HOST", 100)
 
-	log.Printf("🔧 Transport config: MaxIdleConns=%d, MaxIdleConnsPerHost=%d, MaxConnsPerHost=%d",
-		maxIdleConns, maxIdleConnsPerHost, maxConnsPerHost)
-
-	// Оптимизированный транспорт для высоких нагрузок
+	// Create optimized HTTP transport
 	transport := &http.Transport{
 		MaxIdleConns:        maxIdleConns,
 		MaxIdleConnsPerHost: maxIdleConnsPerHost,
 		MaxConnsPerHost:     maxConnsPerHost,
 		IdleConnTimeout:     90 * time.Second,
-		DisableCompression:  true, // Отключаем для максимальной производительности
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true, // For MITM proxy
+		},
+		DisableCompression: true, // Maximum throughput
+		ForceAttemptHTTP2:  true, // Enable HTTP/2
 	}
 
-	return &Server{
-		certManager: certManager,
+	return &ProxyServer{
+		certManager: certMgr,
 		transport:   transport,
-		bufferPool:  pool.NewBufferPool(32 * 1024), // 32KB буферы для оптимального I/O
 	}, nil
 }
 
-// ServeHTTP обрабатывает входящие HTTP/HTTPS запросы
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// ServeHTTP handles incoming HTTP requests
+func (p *ProxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodConnect {
-		s.handleConnect(w, r)
+		p.handleConnect(w, r)
 	} else {
-		s.handleHTTP(w, r)
+		p.handleHTTP(w, r)
 	}
 }
 
-// handleHTTP обрабатывает обычные HTTP запросы
-func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	// Удаляем hop-by-hop заголовки
-	removeHopHeaders(r.Header)
+// handleHTTP handles regular HTTP requests
+func (p *ProxyServer) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("→ %s %s", r.Method, r.URL)
 
-	// Копируем запрос для пересылки
-	outReq := r.Clone(r.Context())
-	if outReq.URL.Scheme == "" {
-		outReq.URL.Scheme = "http"
-	}
-	if outReq.URL.Host == "" {
-		outReq.URL.Host = r.Host
+	// Create new request to target
+	req, err := http.NewRequest(r.Method, r.URL.String(), r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	// Логирование запроса
-	log.Printf("→ HTTP %s %s", r.Method, outReq.URL)
+	// Copy headers
+	for name, values := range r.Header {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
+	}
 
-	// Отправляем запрос к целевому серверу
-	resp, err := s.transport.RoundTrip(outReq)
+	// Send request
+	resp, err := p.transport.RoundTrip(req)
 	if err != nil {
 		log.Printf("✗ Error forwarding request: %v", err)
-		http.Error(w, fmt.Sprintf("Proxy error: %v", err), http.StatusBadGateway)
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
-	// Копируем заголовки ответа
-	copyHeaders(w.Header(), resp.Header)
+	// Copy response headers
+	for name, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
+	}
+
 	w.WriteHeader(resp.StatusCode)
 
-	// Используем буферный пул для эффективного копирования (zero-copy оптимизация)
-	buf := s.bufferPool.Get()
-	defer s.bufferPool.Put(buf)
+	// Copy response body with pooled buffer
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 
-	if _, err := io.CopyBuffer(w, resp.Body, buf); err != nil {
-		log.Printf("✗ Error copying response body: %v", err)
+	_, err = io.CopyBuffer(w, resp.Body, buf.Bytes()[:cap(buf.Bytes())])
+	if err != nil && err != io.EOF {
+		log.Printf("✗ Error copying response: %v", err)
 	}
 
-	log.Printf("← HTTP %d %s", resp.StatusCode, resp.Status)
+	log.Printf("← %d %s", resp.StatusCode, r.URL)
 }
 
-// handleConnect обрабатывает HTTPS CONNECT запросы с MITM
-func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
-	host := r.URL.Host
-	if host == "" {
-		host = r.Host
-	}
+// handleConnect handles HTTPS CONNECT requests for MITM
+func (p *ProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) {
+	log.Printf("🔍 CONNECT %s", r.Host)
 
-	log.Printf("→ CONNECT %s", host)
-
-	// Hijack TCP соединение для raw доступа
+	// Hijack the connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		log.Println("✗ Hijacking not supported")
 		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
 		return
 	}
@@ -131,130 +127,75 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
 		log.Printf("✗ Hijack error: %v", err)
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	defer clientConn.Close()
 
-	// Отправляем клиенту успешный ответ
-	if _, err := clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
-		log.Printf("✗ Failed to write 200 response: %v", err)
-		return
-	}
-
-	// Извлекаем hostname из host:port
-	hostname, _, _ := net.SplitHostPort(host)
-	if hostname == "" {
-		hostname = host
-	}
-
-	// Получаем или генерируем сертификат для хоста
-	tlsCert, err := s.certManager.GetCertForHost(hostname)
+	// Send 200 Connection Established
+	_, err = clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 	if err != nil {
-		log.Printf("✗ Failed to get certificate for %s: %v", hostname, err)
+		log.Printf("✗ Failed to send 200: %v", err)
 		return
 	}
 
-	// Устанавливаем TLS соединение с клиентом
+	// Extract hostname
+	host, _, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		host = r.Host
+	}
+
+	// Get certificate for host
+	tlsCert, err := p.certManager.GetCertificate(host)
+	if err != nil {
+		log.Printf("✗ Failed to get certificate for %s: %v", host, err)
+		return
+	}
+
+	// Wrap connection with TLS
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{*tlsCert},
-		MinVersion:   tls.VersionTLS12,
 	}
-	tlsClientConn := tls.Server(clientConn, tlsConfig)
-	defer tlsClientConn.Close()
 
-	// Выполняем TLS handshake
-	if err := tlsClientConn.Handshake(); err != nil {
+	tlsConn := tls.Server(clientConn, tlsConfig)
+	defer tlsConn.Close()
+
+	// Perform TLS handshake
+	if err := tlsConn.Handshake(); err != nil {
 		log.Printf("✗ TLS handshake failed: %v", err)
 		return
 	}
 
-	// Читаем HTTP запрос от клиента через TLS
-	reader := bufio.NewReader(tlsClientConn)
+	// Read HTTP request from TLS connection
+	reader := bufio.NewReader(tlsConn)
 	req, err := http.ReadRequest(reader)
 	if err != nil {
-		if err != io.EOF {
-			log.Printf("✗ Failed to read request: %v", err)
-		}
+		log.Printf("✗ Failed to read request: %v", err)
 		return
 	}
 
-	// Устанавливаем TLS соединение с целевым сервером
-	targetConn, err := tls.Dial("tcp", host, &tls.Config{
-		ServerName:         hostname,
-		InsecureSkipVerify: false,
-	})
-	if err != nil {
-		log.Printf("✗ Failed to connect to %s: %v", host, err)
-		return
-	}
-	defer targetConn.Close()
-
-	// Подготавливаем запрос для отправки
-	req.RequestURI = ""
+	// Fix request URL
 	req.URL.Scheme = "https"
-	req.URL.Host = host
+	req.URL.Host = r.Host
 
-	// Точка инспектирования запроса (можно добавить логику анализа)
-	log.Printf("🔍 MITM Request: %s %s", req.Method, req.URL)
-
-	// Отправляем запрос к целевому серверу
-	if err := req.Write(targetConn); err != nil {
-		log.Printf("✗ Failed to write request to target: %v", err)
-		return
-	}
-
-	// Читаем ответ от целевого сервера
-	resp, err := http.ReadResponse(bufio.NewReader(targetConn), req)
+	// Forward request
+	resp, err := p.transport.RoundTrip(req)
 	if err != nil {
-		log.Printf("✗ Failed to read response: %v", err)
+		log.Printf("✗ Error forwarding HTTPS request: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	// Точка инспектирования ответа
-	log.Printf("🔍 MITM Response: %d %s", resp.StatusCode, resp.Status)
-
-	// Отправляем ответ клиенту
-	if err := resp.Write(tlsClientConn); err != nil {
-		log.Printf("✗ Failed to write response to client: %v", err)
+	// Write response
+	if err := resp.Write(tlsConn); err != nil {
+		log.Printf("✗ Error writing response: %v", err)
 	}
 }
 
-// Вспомогательные функции
-
-// removeHopHeaders удаляет hop-by-hop заголовки согласно RFC 2616
-func removeHopHeaders(h http.Header) {
-	hopHeaders := []string{
-		"Connection",
-		"Proxy-Connection",
-		"Keep-Alive",
-		"Proxy-Authenticate",
-		"Proxy-Authorization",
-		"Te",
-		"Trailer",
-		"Transfer-Encoding",
-		"Upgrade",
-	}
-	for _, header := range hopHeaders {
-		h.Del(header)
-	}
-}
-
-// copyHeaders копирует HTTP заголовки из источника в назначение
-func copyHeaders(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
-
-// getEnvInt читает целочисленное значение из переменной окружения
+// getEnvInt gets an integer from environment variable with default
 func getEnvInt(key string, defaultValue int) int {
-	if val := os.Getenv(key); val != "" {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
 		}
 	}
 	return defaultValue
