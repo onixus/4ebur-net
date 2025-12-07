@@ -52,7 +52,7 @@ docker-compose logs -f
 # Or using Docker CLI
 docker run -d \
   --name 4ebur-net \
-  -p 8080:8080 \
+  -p 1488:1488 \
   -e MAX_IDLE_CONNS=2000 \
   --restart unless-stopped \
   onixus/4ebur-net:latest
@@ -91,30 +91,30 @@ go install github.com/onixus/4ebur-net/cmd/proxy@latest
 ╔═══════════════════════════════════════════════════════════╗
 ║         4ebur-net MITM Proxy Server Started              ║
 ╚═══════════════════════════════════════════════════════════╝
-🚀 Listening on port: 8080
-🔧 Configure proxy: localhost:8080
+🚀 Listening on port: 1488
+🔧 Configure proxy: localhost:1488
 ⚠️  Remember to install CA certificate in your trust store!
 ```
 
 ### Configure your client
 
 **Browser/System proxy settings:**
-- HTTP Proxy: `localhost:8080`
-- HTTPS Proxy: `localhost:8080`
+- HTTP Proxy: `localhost:1488`
+- HTTPS Proxy: `localhost:1488`
 - SOCKS Proxy: Not required
 
 **Command line examples:**
 
 ```bash
 # Using curl
-curl -x http://localhost:8080 https://example.com
+curl -x http://localhost:1488 https://example.com
 
 # Using wget
-wget -e use_proxy=yes -e http_proxy=localhost:8080 https://example.com
+wget -e use_proxy=yes -e http_proxy=localhost:1488 https://example.com
 
 # Set system-wide (Linux)
-export HTTP_PROXY=http://localhost:8080
-export HTTPS_PROXY=http://localhost:8080
+export HTTP_PROXY=http://localhost:1488
+export HTTPS_PROXY=http://localhost:1488
 ```
 
 ### Install CA Certificate
@@ -129,7 +129,7 @@ Configure via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PROXY_PORT` | `8080` | Proxy server listening port |
+| `PROXY_PORT` | `1488` | Proxy server listening port |
 | `MAX_IDLE_CONNS` | `1000` | Maximum idle connections in pool |
 | `MAX_IDLE_CONNS_PER_HOST` | `100` | Maximum idle connections per host |
 | `MAX_CONNS_PER_HOST` | `100` | Maximum total connections per host |
@@ -214,16 +214,16 @@ Built-in pprof support for performance analysis:
 
 ```bash
 # CPU profiling (30 seconds)
-go tool pprof http://localhost:8080/debug/pprof/profile
+go tool pprof http://localhost:1488/debug/pprof/profile
 
 # Heap memory profiling
-go tool pprof http://localhost:8080/debug/pprof/heap
+go tool pprof http://localhost:1488/debug/pprof/heap
 
 # Goroutine profiling
-go tool pprof http://localhost:8080/debug/pprof/goroutine
+go tool pprof http://localhost:1488/debug/pprof/goroutine
 
 # View all profiles
-curl http://localhost:8080/debug/pprof/
+curl http://localhost:1488/debug/pprof/
 ```
 
 ## 📁 Project Structure
@@ -354,8 +354,8 @@ Structured logging with visual indicators:
 ### Connection refused errors
 
 **Check:**
-- Proxy is running: `netstat -tulpn | grep 8080` or `docker ps`
-- Firewall rules allow port 8080
+- Proxy is running: `netstat -tulpn | grep 1488` or `docker ps`
+- Firewall rules allow port 1488
 - Correct proxy configuration in client
 - Docker port mapping is correct
 
