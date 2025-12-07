@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  4ebur-net:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: onixus/4ebur-net:latest
+    container_name: 4ebur-net-proxy
+    restart: unless-stopped
+    
+    ports:
+      - "8080:8080"  # HTTP/HTTPS proxy port
+    
+    environment:
+      - PROXY_PORT=8080
+      - MAX_IDLE_CONNS=2000
+      - MAX_IDLE_CONNS_PER_HOST=200
+      - MAX_CONNS_PER_HOST=200
+      - TZ=Europe/Moscow
+    
+    # Ограничения ресурсов для production
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Мониторинг здоровья
+    healthcheck:
+      test: ["CMD", "/4ebur-net", "--health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    
+    # Сетевые настройки
+    networks:
+      - proxy-network
+    
+    # Системные настройки для высоких нагрузок
+    sysctls:
+      - net.core.somaxconn=65535
+      - net.ipv4.tcp_max_syn_backlog=8192
+      - net.ipv4.ip_local_port_range=1024 65535
+      - net.ipv4.tcp_tw_reuse=1
+      - net.ipv4.tcp_fin_timeout=15
+    
+    # Увеличиваем лимиты для файловых дескрипторов
+    ulimits:
+      nofile:
+        soft: 100000
+        hard: 100000
+
+networks:
+  proxy-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
