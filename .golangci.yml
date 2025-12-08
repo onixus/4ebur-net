@@ -1,67 +1,63 @@
-# golangci-lint configuration
-
 run:
   timeout: 5m
   tests: true
-  modules-download-mode: readonly
+  build-tags: []
+  skip-dirs:
+    - vendor
 
 linters:
   enable:
     - gofmt
-    - goimports
     - govet
     - errcheck
     - staticcheck
     - unused
     - gosimple
-    - structcheck
-    - varcheck
     - ineffassign
-    - deadcode
     - typecheck
-    - gosec
+    - exportloopref
     - gocyclo
+    - dupl
     - misspell
     - unparam
     - unconvert
-    - goconst
     - gocritic
-    - bodyclose
-    - noctx
-    - rowserrcheck
-    - sqlclosecheck
+    - gofumpt
+    - revive
+  disable:
+    - structcheck  # deprecated
+    - varcheck     # deprecated
+    - deadcode     # deprecated
+    - golint       # deprecated
+    - scopelint    # deprecated
 
 linters-settings:
+  govet:
+    check-shadowing: true
   gocyclo:
     min-complexity: 15
-  
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  
+  dupl:
+    threshold: 100
   gocritic:
     enabled-tags:
       - diagnostic
-      - experimental
-      - opinionated
       - performance
       - style
-  
-  gosec:
-    severity: medium
-    confidence: medium
-    excludes:
-      - G404  # Use of weak random number generator
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+  revive:
+    rules:
+      - name: exported
+        disabled: true
 
 issues:
-  exclude-use-default: false
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  
   exclude-rules:
-    # Exclude some linters from running on tests files
     - path: _test\.go
       linters:
         - gocyclo
         - errcheck
+        - dupl
         - gosec
+  max-issues-per-linter: 0
+  max-same-issues: 0

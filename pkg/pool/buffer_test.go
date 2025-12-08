@@ -23,7 +23,10 @@ func TestBufferPool(t *testing.T) {
 
 	// Use buffer
 	data := []byte("test data")
-	buf.Write(data)
+	_, err := buf.Write(data)
+	if err != nil {
+		t.Fatalf("Failed to write to buffer: %v", err)
+	}
 
 	if buf.Len() != len(data) {
 		t.Errorf("Expected buffer length %d, got %d", len(data), buf.Len())
@@ -57,7 +60,12 @@ func TestBufferPoolConcurrency(t *testing.T) {
 
 			// Use buffer
 			data := bytes.Repeat([]byte{byte(id)}, 1024)
-			buf.Write(data)
+			_, err := buf.Write(data)
+			if err != nil {
+				t.Errorf("Failed to write to buffer: %v", err)
+				done <- false
+				return
+			}
 
 			// Verify
 			if buf.Len() != len(data) {
@@ -83,7 +91,10 @@ func TestBufferPoolReset(t *testing.T) {
 
 	// Write some data
 	originalData := []byte("original data that should be cleared")
-	buf.Write(originalData)
+	_, err := buf.Write(originalData)
+	if err != nil {
+		t.Fatalf("Failed to write to buffer: %v", err)
+	}
 
 	if buf.Len() != len(originalData) {
 		t.Fatalf("Expected length %d, got %d", len(originalData), buf.Len())
@@ -118,7 +129,7 @@ func BenchmarkBufferPoolGetPut(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			buf := GetBuffer()
-			buf.Write([]byte("benchmark data"))
+			_, _ = buf.WriteString("benchmark data")
 			PutBuffer(buf)
 		}
 	})
@@ -128,7 +139,7 @@ func BenchmarkBufferPoolVsNew(b *testing.B) {
 	b.Run("Pool", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			buf := GetBuffer()
-			buf.Write([]byte("test"))
+			_, _ = buf.WriteString("test")
 			PutBuffer(buf)
 		}
 	})
@@ -136,7 +147,7 @@ func BenchmarkBufferPoolVsNew(b *testing.B) {
 	b.Run("New", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			buf := bytes.NewBuffer(make([]byte, 0, 32*1024))
-			buf.Write([]byte("test"))
+			_, _ = buf.WriteString("test")
 		}
 	})
 }
