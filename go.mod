@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/redis/go-redis/v9 v9.5.1
-	github.com/rs/zerolog v1.32.0
+	github.com/rs/zerolog v1.34.0
 )
 
 require (
