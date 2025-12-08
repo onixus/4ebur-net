@@ -261,6 +261,11 @@ func (p *ProxyServer) GetCacheStats() (hits, misses uint64, size int64, entries 
 	return
 }
 
+// GetCACertificate returns the CA certificate in PEM format
+func (p *ProxyServer) GetCACertificate() []byte {
+	return p.certManager.GetCACertPEM()
+}
+
 // getEnvInt gets an integer from environment variable with default
 func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {

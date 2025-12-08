@@ -24,10 +24,52 @@ func main() {
 		port = "1488"
 	}
 
+	// Создаем HTTP mux для специальных endpoints
+	mux := http.NewServeMux()
+
+	// Endpoint для скачивания CA сертификата
+	mux.HandleFunc("/ca.crt", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		caCert := proxyServer.GetCACertificate()
+		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+		w.Header().Set("Content-Disposition", "attachment; filename=\"4ebur-net-ca.crt\"")
+		w.Write(caCert)
+
+		log.Printf("📥 CA certificate downloaded from %s", r.RemoteAddr)
+	})
+
+	// Endpoint для статистики кеша
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		hits, misses, size, entries, hitRate := proxyServer.GetCacheStats()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(fmt.Sprintf(
+			`{"cache_hits":%d,"cache_misses":%d,"cache_size_bytes":%d,"cache_entries":%d,"hit_rate":%.2f}`,
+			hits, misses, size, entries, hitRate,
+		)))
+	})
+
+	// Health check endpoint
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok","service":"4ebur-net"}`))
+	})
+
+	// Все остальные запросы идут в прокси
+	mux.HandleFunc("/", proxyServer.ServeHTTP)
+
 	// Настраиваем HTTP сервер с оптимальными параметрами
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           proxyServer,
+		Handler:           mux,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -40,6 +82,9 @@ func main() {
 	log.Println("╚═══════════════════════════════════════════════════════════╝")
 	log.Printf("🚀 Listening on port: %s", port)
 	log.Printf("🔧 Configure proxy: localhost:%s", port)
+	log.Printf("📥 Download CA certificate: http://localhost:%s/ca.crt", port)
+	log.Printf("📊 Cache stats: http://localhost:%s/stats", port)
+	log.Printf("💚 Health check: http://localhost:%s/health", port)
 	log.Println("⚠️  Remember to install CA certificate in your trust store!")
 	log.Println("───────────────────────────────────────────────────────────")
 
