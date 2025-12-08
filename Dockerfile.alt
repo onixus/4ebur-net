@@ -1,0 +1,94 @@
+# Multi-stage build для ALT Linux (российская ОС)
+# Базовый образ: ALT Sisyphus (rolling release)
+
+# Stage 1: Builder
+FROM alt:sisyphus AS builder
+
+# Метаданные
+LABEL maintainer="onixus@live.ru"
+LABEL description="4ebur-net MITM Proxy на базе ALT Linux Sisyphus"
+
+# Установка зависимостей для сборки
+RUN apt-get update && apt-get install -y \
+    golang \
+    git \
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/cache/apt/archives/* /var/cache/apt/*.bin
+
+# Проверка версии Go
+RUN go version
+
+# Рабочая директория
+WORKDIR /build
+
+# Копируем go.mod и go.sum для кеширования зависимостей
+COPY go.mod go.sum ./
+
+# Скачиваем зависимости
+RUN go mod download
+
+# Копируем исходный код
+COPY . .
+
+# Сборка статического бинарника
+# CGO_ENABLED=0 для статической линковки
+# -ldflags для уменьшения размера и удаления debug информации
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o 4ebur-net \
+    ./cmd/proxy
+
+# Проверка бинарника
+RUN ls -lh 4ebur-net && file 4ebur-net
+
+# Stage 2: Runtime (минимальный образ)
+FROM alt:sisyphus
+
+# Метаданные для production
+LABEL org.opencontainers.image.title="4ebur-net"
+LABEL org.opencontainers.image.description="High-performance MITM forward proxy на ALT Linux"
+LABEL org.opencontainers.image.authors="onixus@live.ru"
+LABEL org.opencontainers.image.source="https://github.com/onixus/4ebur-net"
+LABEL org.opencontainers.image.vendor="ALT Linux Team"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Установка минимальных runtime зависимостей
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    tzdata \
+    && apt-get clean \
+    && rm -rf /var/cache/apt/archives/* /var/cache/apt/*.bin
+
+# Создание непривилегированного пользователя
+RUN groupadd -r proxy && useradd -r -g proxy -s /sbin/nologin proxy
+
+# Рабочая директория
+WORKDIR /app
+
+# Копируем бинарник из builder stage
+COPY --from=builder /build/4ebur-net .
+
+# Установка прав
+RUN chown -R proxy:proxy /app && chmod +x /app/4ebur-net
+
+# Переключение на непривилегированного пользователя
+USER proxy
+
+# Открываем порт прокси
+EXPOSE 1488
+
+# Environment variables
+ENV PROXY_PORT=1488 \
+    CACHE_SIZE_MB=100 \
+    CACHE_MAX_AGE=5m \
+    LOG_LEVEL=info \
+    LOG_FORMAT=json
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["sh", "-c", "nc -z localhost ${PROXY_PORT} || exit 1"]
+
+# Запуск прокси
+ENTRYPOINT ["/app/4ebur-net"]

@@ -1,0 +1,88 @@
+# Docker Compose для ALT Linux версий
+version: '3.8'
+
+services:
+  # 4ebur-net на ALT Sisyphus (rolling release)
+  proxy-sisyphus:
+    build:
+      context: .
+      dockerfile: Dockerfile.alt
+      args:
+        - VERSION=1.2.0
+    image: onixus/4ebur-net:alt-sisyphus
+    container_name: 4ebur-net-alt-sisyphus
+    ports:
+      - "1488:1488"
+    environment:
+      - PROXY_PORT=1488
+      - CACHE_SIZE_MB=200
+      - CACHE_MAX_AGE=10m
+      - MAX_IDLE_CONNS=2000
+      - MAX_IDLE_CONNS_PER_HOST=200
+      - MAX_CONNS_PER_HOST=200
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    volumes:
+      - ./certs:/app/certs
+    restart: unless-stopped
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1488"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # Ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+
+  # 4ebur-net на ALT P10 (stable)
+  proxy-p10:
+    build:
+      context: .
+      dockerfile: Dockerfile.alt-p10
+      args:
+        - VERSION=1.2.0
+    image: onixus/4ebur-net:alt-p10
+    container_name: 4ebur-net-alt-p10
+    ports:
+      - "1489:1488"
+    environment:
+      - PROXY_PORT=1488
+      - CACHE_SIZE_MB=200
+      - CACHE_MAX_AGE=10m
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    volumes:
+      - ./certs:/app/certs
+    restart: unless-stopped
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1488"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+
+networks:
+  proxy-net:
+    driver: bridge
+
+volumes:
+  certs:
+    driver: local

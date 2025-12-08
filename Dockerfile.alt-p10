@@ -1,0 +1,93 @@
+# Multi-stage build для ALT Linux P10 (стабильная ветка)
+# Подходит для production окружений
+
+# Stage 1: Builder
+FROM alt:p10 AS builder
+
+# Метаданные
+LABEL maintainer="onixus@live.ru"
+LABEL description="4ebur-net MITM Proxy на базе ALT Linux P10 (стабильная ветка)"
+
+# Установка зависимостей для сборки
+RUN apt-get update && apt-get install -y \
+    golang \
+    git \
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/cache/apt/archives/* /var/cache/apt/*.bin
+
+# Проверка версии Go
+RUN go version
+
+# Рабочая директория
+WORKDIR /build
+
+# Копируем go.mod и go.sum
+COPY go.mod go.sum ./
+
+# Скачиваем зависимости
+RUN go mod download
+
+# Копируем исходный код
+COPY . .
+
+# Сборка статического бинарника
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o 4ebur-net \
+    ./cmd/proxy
+
+# Проверка
+RUN ls -lh 4ebur-net && file 4ebur-net
+
+# Stage 2: Runtime (стабильный P10)
+FROM alt:p10
+
+# Метаданные
+LABEL org.opencontainers.image.title="4ebur-net"
+LABEL org.opencontainers.image.description="MITM Proxy на ALT Linux P10 (stable)"
+LABEL org.opencontainers.image.authors="onixus@live.ru"
+LABEL org.opencontainers.image.source="https://github.com/onixus/4ebur-net"
+LABEL org.opencontainers.image.vendor="ALT Linux Team"
+LABEL org.opencontainers.image.version="p10"
+
+# Runtime зависимости
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    tzdata \
+    netcat \
+    && apt-get clean \
+    && rm -rf /var/cache/apt/archives/* /var/cache/apt/*.bin
+
+# Создание пользователя
+RUN groupadd -r proxy && useradd -r -g proxy -s /sbin/nologin proxy
+
+# Рабочая директория
+WORKDIR /app
+
+# Копируем бинарник
+COPY --from=builder /build/4ebur-net .
+
+# Права доступа
+RUN chown -R proxy:proxy /app && chmod +x /app/4ebur-net
+
+# Непривилегированный пользователь
+USER proxy
+
+# Порт
+EXPOSE 1488
+
+# Environment
+ENV PROXY_PORT=1488 \
+    CACHE_SIZE_MB=100 \
+    CACHE_MAX_AGE=5m \
+    LOG_LEVEL=info \
+    LOG_FORMAT=json
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD nc -z localhost ${PROXY_PORT} || exit 1
+
+# Entrypoint
+ENTRYPOINT ["/app/4ebur-net"]
