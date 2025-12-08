@@ -24,6 +24,7 @@ type ProxyServer struct {
 	certManager *cert.CertManager
 	transport   *http.Transport
 	httpCache   *cache.HTTPCache
+	cacheMaxAge time.Duration
 	mu          sync.RWMutex
 }
 
@@ -65,6 +66,7 @@ func NewProxyServer() (*ProxyServer, error) {
 		certManager: certMgr,
 		transport:   transport,
 		httpCache:   httpCache,
+		cacheMaxAge: cacheMaxAge,
 	}, nil
 }
 
@@ -119,7 +121,7 @@ func (p *ProxyServer) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if cacheable
 	if cache.IsCacheable(r, resp) {
 		// Create cache entry
-		if entry, err := cache.CreateCacheEntry(resp, p.httpCache.Stats); err == nil {
+		if entry, err := cache.CreateCacheEntry(resp, p.cacheMaxAge); err == nil {
 			p.httpCache.Set(cacheKey, entry)
 			log.Printf("💾 Cached response for: %s (size: %d bytes)", r.URL, entry.Size)
 		}
@@ -240,7 +242,7 @@ func (p *ProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	// Check if cacheable and cache it
 	if cache.IsCacheable(req, resp) {
-		if entry, err := cache.CreateCacheEntry(resp, p.httpCache.Stats); err == nil {
+		if entry, err := cache.CreateCacheEntry(resp, p.cacheMaxAge); err == nil {
 			p.httpCache.Set(cacheKey, entry)
 			log.Printf("💾 Cached HTTPS response for: %s (size: %d bytes)", req.URL, entry.Size)
 		}
