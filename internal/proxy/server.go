@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onixus/4ebur-net/internal/cache"
 	"github.com/onixus/4ebur-net/internal/cert"
 	"github.com/onixus/4ebur-net/pkg/pool"
 )
@@ -21,6 +23,7 @@ import (
 type ProxyServer struct {
 	certManager *cert.CertManager
 	transport   *http.Transport
+	httpCache   *cache.HTTPCache
 	mu          sync.RWMutex
 }
 
@@ -35,6 +38,8 @@ func NewProxyServer() (*ProxyServer, error) {
 	maxIdleConns := getEnvInt("MAX_IDLE_CONNS", 1000)
 	maxIdleConnsPerHost := getEnvInt("MAX_IDLE_CONNS_PER_HOST", 100)
 	maxConnsPerHost := getEnvInt("MAX_CONNS_PER_HOST", 100)
+	cacheSize := getEnvInt64("CACHE_SIZE_MB", 100) * 1024 * 1024
+	cacheMaxAge := getEnvDuration("CACHE_MAX_AGE", 5*time.Minute)
 
 	// Create optimized HTTP transport
 	transport := &http.Transport{
@@ -50,9 +55,16 @@ func NewProxyServer() (*ProxyServer, error) {
 		ForceAttemptHTTP2:  true, // Enable HTTP/2
 	}
 
+	// Create HTTP cache
+	httpCache := cache.NewHTTPCache(cacheSize, cacheMaxAge)
+
+	// Log cache configuration
+	log.Printf("💾 Cache enabled: %dMB, max-age: %v", cacheSize/(1024*1024), cacheMaxAge)
+
 	return &ProxyServer{
 		certManager: certMgr,
 		transport:   transport,
+		httpCache:   httpCache,
 	}, nil
 }
 
@@ -65,9 +77,21 @@ func (p *ProxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleHTTP handles regular HTTP requests
+// handleHTTP handles regular HTTP requests with caching
 func (p *ProxyServer) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("→ %s %s", r.Method, r.URL)
+
+	// Try to get from cache
+	cacheKey := cache.GenerateKey(r)
+	if entry, found := p.httpCache.Get(cacheKey); found {
+		log.Printf("💾 Cache HIT: %s", r.URL)
+		if err := entry.WriteToResponse(w); err != nil {
+			log.Printf("✗ Error writing cached response: %v", err)
+		}
+		return
+	}
+
+	log.Printf("💿 Cache MISS: %s", r.URL)
 
 	// Create new request to target
 	req, err := http.NewRequest(r.Method, r.URL.String(), r.Body)
@@ -92,6 +116,15 @@ func (p *ProxyServer) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Check if cacheable
+	if cache.IsCacheable(r, resp) {
+		// Create cache entry
+		if entry, err := cache.CreateCacheEntry(resp, p.httpCache.Stats); err == nil {
+			p.httpCache.Set(cacheKey, entry)
+			log.Printf("💾 Cached response for: %s (size: %d bytes)", r.URL, entry.Size)
+		}
+	}
+
 	// Copy response headers
 	for name, values := range resp.Header {
 		for _, value := range values {
@@ -99,6 +132,8 @@ func (p *ProxyServer) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Add cache miss header
+	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(resp.StatusCode)
 
 	// Copy response body with pooled buffer
@@ -177,6 +212,24 @@ func (p *ProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) {
 	req.URL.Scheme = "https"
 	req.URL.Host = r.Host
 
+	// Check cache for HTTPS requests
+	cacheKey := cache.GenerateKey(req)
+	if entry, found := p.httpCache.Get(cacheKey); found {
+		log.Printf("💾 Cache HIT (HTTPS): %s", req.URL)
+		// Write cached response
+		var buf bytes.Buffer
+		resp := &http.Response{
+			StatusCode: entry.StatusCode,
+			Header:     entry.Headers,
+			Body:       io.NopCloser(bytes.NewReader(entry.Body)),
+		}
+		resp.Write(&buf)
+		tlsConn.Write(buf.Bytes())
+		return
+	}
+
+	log.Printf("💿 Cache MISS (HTTPS): %s", req.URL)
+
 	// Forward request
 	resp, err := p.transport.RoundTrip(req)
 	if err != nil {
@@ -185,10 +238,25 @@ func (p *ProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Check if cacheable and cache it
+	if cache.IsCacheable(req, resp) {
+		if entry, err := cache.CreateCacheEntry(resp, p.httpCache.Stats); err == nil {
+			p.httpCache.Set(cacheKey, entry)
+			log.Printf("💾 Cached HTTPS response for: %s (size: %d bytes)", req.URL, entry.Size)
+		}
+	}
+
 	// Write response
 	if err := resp.Write(tlsConn); err != nil {
 		log.Printf("✗ Error writing response: %v", err)
 	}
+}
+
+// GetCacheStats returns cache statistics
+func (p *ProxyServer) GetCacheStats() (hits, misses uint64, size int64, entries int, hitRate float64) {
+	hits, misses, size, entries = p.httpCache.Stats()
+	hitRate = p.httpCache.HitRate()
+	return
 }
 
 // getEnvInt gets an integer from environment variable with default
@@ -196,6 +264,26 @@ func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+// getEnvInt64 gets an int64 from environment variable with default
+func getEnvInt64(key string, defaultValue int64) int64 {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}
+
+// getEnvDuration gets a duration from environment variable with default
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	if value := os.Getenv(key); value != "" {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
 		}
 	}
 	return defaultValue
