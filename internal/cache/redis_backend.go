@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,10 +46,10 @@ func NewRedisBackend(addr, password string, db int) (*RedisBackend, error) {
 // Get retrieves a cache entry from Redis
 func (r *RedisBackend) Get(key string) (*CacheEntry, error) {
 	data, err := r.client.Get(r.ctx, key).Bytes()
-	if err == redis.Nil {
-		return nil, nil // Cache miss
-	}
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil // Cache miss
+		}
 		return nil, fmt.Errorf("redis get failed: %w", err)
 	}
 
