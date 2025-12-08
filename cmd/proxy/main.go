@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -37,7 +38,7 @@ func main() {
 		caCert := proxyServer.GetCACertificate()
 		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
 		w.Header().Set("Content-Disposition", "attachment; filename=\"4ebur-net-ca.crt\"")
-		w.Write(caCert)
+		_, _ = w.Write(caCert)
 
 		log.Printf("📥 CA certificate downloaded from %s", r.RemoteAddr)
 	})
@@ -51,7 +52,7 @@ func main() {
 
 		hits, misses, size, entries, hitRate := proxyServer.GetCacheStats()
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(fmt.Sprintf(
+		_, _ = w.Write([]byte(fmt.Sprintf(
 			`{"cache_hits":%d,"cache_misses":%d,"cache_size_bytes":%d,"cache_entries":%d,"hit_rate":%.2f}`,
 			hits, misses, size, entries, hitRate,
 		)))
@@ -60,7 +61,7 @@ func main() {
 	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok","service":"4ebur-net"}`))
+		_, _ = w.Write([]byte(`{"status":"ok","service":"4ebur-net"}`))
 	})
 
 	// Все остальные запросы идут в прокси
