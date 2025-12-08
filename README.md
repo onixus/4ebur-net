@@ -749,27 +749,321 @@ Found a bug or have a question?
 
 ## 🚀 Roadmap
 
-- [x] Docker container support
-- [x] Multi-stage optimized builds
-- [x] Production-ready docker-compose
-- [x] CI/CD pipeline with GitHub Actions
-- [x] Automated security scanning
-- [x] Multi-platform releases
-- [x] Comprehensive unit tests
-- [x] Test coverage reporting
+### Current Version: v1.1.0
+
+**Completed Features:**
+- [x] Docker container support with multi-stage builds
+- [x] Production-ready docker-compose configuration
+- [x] Comprehensive CI/CD pipeline with GitHub Actions
+- [x] Automated security scanning (Gosec, CodeQL)
+- [x] Multi-platform releases (Linux, macOS, Windows)
+- [x] Comprehensive unit tests with >80% coverage
+- [x] Test coverage reporting and Codecov integration
 - [x] Development automation (Makefile)
 - [x] HTTP caching with LRU eviction
-- [ ] Redis/Memcached backend for distributed caching
-- [ ] Cache statistics API endpoint
-- [ ] WebSocket proxying
-- [ ] Request/response modification hooks
-- [ ] Plugin system for custom logic
-- [ ] Web UI for traffic inspection
-- [ ] Traffic recording and replay
-- [ ] Metrics export (Prometheus)
-- [ ] gRPC support
-- [ ] Load balancing capabilities
-- [ ] Kubernetes deployment manifests
+- [x] MITM HTTPS interception
+- [x] Connection pooling and HTTP/2 support
+
+---
+
+### 🎯 Phase 1: Production Hardening (v1.2.0 - v1.4.0)
+**Timeline:** 1-2 months | **Goal:** Enterprise stability
+
+#### v1.2.0 - Observability & Metrics 🔴 CRITICAL
+**ETA:** 2 weeks | **Priority:** Must-have
+
+- [ ] **Prometheus Metrics Endpoint** (`/metrics`)
+  - Request counters (total, by method, by status)
+  - Cache hit/miss rates and ratios
+  - Response time histograms (p50, p95, p99)
+  - Active connections gauge
+  - Cache size and entry count
+  - Upstream error counters
+- [ ] **Health Check Endpoint** (`/health`)
+  - Uptime tracking
+  - Cache statistics
+  - Connection pool status
+  - JSON response format
+- [ ] **Structured JSON Logging**
+  - Replace plain text with structured logs
+  - Log levels (DEBUG, INFO, WARN, ERROR)
+  - Request tracing with correlation IDs
+  - ELK/Loki compatible format
+- [ ] **Grafana Dashboard Template**
+  - Pre-built monitoring dashboard
+  - Alert rules for Prometheus
+
+**Why critical:** Production deployment impossible without observability.
+
+#### v1.3.0 - Disk-Based Cache 🟠 HIGH
+**ETA:** 3-4 weeks | **Priority:** Should-have
+
+- [ ] **Multi-Tier Caching Architecture**
+  - L1: Hot objects in RAM (100MB)
+  - L2: Bulk storage on disk (100GB+)
+  - Automatic promotion/demotion
+- [ ] **Persistent Cache Index**
+  - SQLite/BoltDB for metadata
+  - Fast lookups with B-tree indexing
+  - Crash recovery support
+- [ ] **Async Disk Writes**
+  - Non-blocking write queue
+  - Batch writes for efficiency
+  - Configurable queue size
+- [ ] **Smart Eviction Policy**
+  - Size-aware placement (large files → disk)
+  - LRU eviction per tier
+  - Access count tracking
+- [ ] **Zero-Copy Disk I/O**
+  - `sendfile()` system call optimization
+  - Direct buffer transfer
+
+**Configuration:**
+```bash
+DISK_CACHE_ENABLED=true
+DISK_CACHE_PATH=/var/cache/4ebur-net
+DISK_CACHE_SIZE_GB=100
+DISK_CACHE_MIN_OBJECT_SIZE=1MB
+```
+
+**Why important:** RAM limitations prevent large-scale caching.
+
+#### v1.4.0 - Access Control Lists (ACLs) 🟠 HIGH
+**ETA:** 2-3 weeks | **Priority:** Should-have
+
+- [ ] **IP-Based Access Control**
+  - Whitelist/blacklist by IP/CIDR
+  - Internal network rules
+- [ ] **Domain/URL Filtering**
+  - Regex pattern matching
+  - Wildcard domain support
+  - Path-based rules
+- [ ] **Time-Based Rules**
+  - Business hours restrictions
+  - Day-of-week schedules
+- [ ] **Method Filtering**
+  - Allow/deny by HTTP method
+  - Read-only policies
+- [ ] **YAML Configuration**
+  - Human-readable ACL definitions
+  - Hot-reload support
+
+**Example configuration:**
+```yaml
+acls:
+  - name: internal_network
+    type: src_ip
+    values: [10.0.0.0/8, 192.168.0.0/16]
+    action: allow
+    
+  - name: block_social
+    type: dst_domain
+    values: [.facebook.com, .twitter.com]
+    action: deny
+```
+
+**Why important:** Security requirement for enterprise deployments.
+
+---
+
+### 🏆 Phase 2: Enterprise Features (v1.5.0 - v1.8.0)
+**Timeline:** 3-4 months | **Goal:** Full enterprise functionality
+
+#### v1.5.0 - Authentication & Authorization 🟡 MEDIUM
+**ETA:** 2-3 weeks
+
+- [ ] **Basic Authentication**
+  - Username/password with bcrypt hashing
+  - In-memory user database
+- [ ] **LDAP Integration**
+  - Active Directory support
+  - Group-based ACLs
+- [ ] **OAuth2/OIDC**
+  - Google, GitHub, Okta providers
+  - JWT token validation
+- [ ] **Per-User ACLs**
+  - User-specific access rules
+  - Role-based permissions
+
+#### v1.6.0 - Content Filtering 🟡 MEDIUM
+**ETA:** 3 weeks
+
+- [ ] **URL Rewriting Engine**
+  - Regex-based URL transformations
+  - HTTP to HTTPS redirects
+- [ ] **ICAP Support**
+  - Antivirus integration (ClamAV, Kaspersky)
+  - Content scanning protocol
+- [ ] **Content-Type Filtering**
+  - Block executables and malicious files
+  - MIME type validation
+- [ ] **Request/Response Modification**
+  - Header injection/removal
+  - Body transformation hooks
+
+#### v1.7.0 - Cache Hierarchies 🟡 MEDIUM
+**ETA:** 3-4 weeks
+
+- [ ] **Parent Proxy Support**
+  - Upstream proxy chaining
+  - Load balancing between parents
+  - Failover handling
+- [ ] **Sibling Peers (ICP/HTCP)**
+  - Inter-Cache Protocol
+  - Cache query optimization
+- [ ] **CARP Protocol**
+  - Consistent hashing for distributed cache
+  - Cache Array Routing
+
+#### v1.8.0 - Advanced Caching 🟮 LOW
+**ETA:** 2-3 weeks
+
+- [ ] **Vary Header Support**
+  - Cache multiple versions by Accept-Language, etc.
+  - Smart key generation
+- [ ] **Stale-While-Revalidate**
+  - Serve stale cache during background refresh
+  - Reduce latency spikes
+- [ ] **Cache Purging API**
+  - Single URL purge
+  - Pattern-based purge (wildcards)
+  - Full cache flush
+- [ ] **Cache Warming**
+  - Pre-populate cache from config
+  - Scheduled refresh jobs
+
+---
+
+### 🚀 Phase 3: Scale & Innovation (v2.0.0+)
+**Timeline:** 6+ months | **Goal:** Competitive advantages
+
+#### v2.0.0 - Distributed Cache 🟮 LOW
+**ETA:** 4-6 weeks
+
+- [ ] **Redis Backend**
+  - Redis Cluster support
+  - Shared cache across instances
+  - Pub/sub for cache invalidation
+- [ ] **Memcached Backend**
+  - Alternative distributed cache
+  - Multi-instance synchronization
+- [ ] **Cache Coherence Protocol**
+  - Automatic invalidation propagation
+  - Consistent reads across cluster
+
+**Unique advantage:** Squid doesn't support distributed caching.
+
+#### v2.1.0 - Performance Innovations 🟮 LOW
+**ETA:** Variable
+
+- [ ] **HTTP/3 (QUIC) Support**
+  - Modern protocol for reduced latency
+  - 0-RTT connection establishment
+- [ ] **eBPF-Based Optimization**
+  - XDP for ultra-low latency
+  - Kernel bypass for hot paths
+- [ ] **WebSocket Proxying**
+  - Full duplex communication
+  - WebSocket MITM support
+- [ ] **gRPC Proxying**
+  - HTTP/2 streaming support
+  - Protobuf inspection
+
+---
+
+### 📊 Roadmap Timeline
+
+```
+Month 1-2:   v1.2 Metrics ━━━━━━━━━━━━━━━━▶ ✅
+             v1.3 Disk Cache ━━━━━━━━━━━━▶ ✅
+             v1.4 ACLs ━━━━━━━━━━━━━━━━▶ ✅
+
+Month 3-4:   v1.5 Auth ━━━━━━━━━━━━━━━━▶ ✅
+             v1.6 Filtering ━━━━━━━━━━━━▶ ✅
+
+Month 5-6:   v1.7 Hierarchies ━━━━━━━━━━▶ ✅
+             v1.8 Advanced Cache ━━━━━━━━▶ ✅
+
+Month 7-10:  v2.0 Distributed ━━━━━━━━━━▶ ✅
+             v2.1 Performance ━━━━━━━━━━▶ ✅
+
+             ┌────────────────────────────────┐
+Month 12:    │   Squid Parity: 70-80%        │
+             │   Production Ready for         │
+             │   Enterprise Deployments       │
+             └────────────────────────────────┘
+```
+
+---
+
+### 🎯 Success Criteria
+
+**After Phase 2 (v1.8.0):**
+- ✅ 70%+ Squid feature parity
+- ✅ All critical enterprise requirements met
+- ✅ Production deployments in 3+ organizations
+- ✅ <2ms p99 latency maintained
+- ✅ 100K+ concurrent connections support
+
+**After Phase 3 (v2.1.0):**
+- ✅ Unique features Squid doesn't have (distributed cache)
+- ✅ 2x throughput vs Squid for typical workloads
+- ✅ Active community (1000+ GitHub stars)
+- ✅ Production-proven at scale
+
+---
+
+### 💼 Effort Estimation
+
+| Phase | Version Range | Dev-Weeks | Squid Parity |
+|-------|---------------|-----------|-------------|
+| **Phase 1** | v1.2 - v1.4 | 7-9 | 50% |
+| **Phase 2** | v1.5 - v1.8 | 10-13 | 70% |
+| **Phase 3** | v2.0 - v2.1 | 14-20 | 75%+ |
+| **Total** | | **31-42 weeks** | **75%** |
+
+**Realistic timeline:** 10-12 months with 2-3 developers
+
+---
+
+### 🔥 Priority Matrix
+
+**Must-Have (MVP for Enterprise):**
+1. ✅ Metrics & Monitoring (v1.2)
+2. ✅ Disk-based cache (v1.3)
+3. ✅ ACLs (v1.4)
+4. ✅ Structured logging (v1.2)
+
+**Should-Have:**
+5. ⚠️ Authentication (v1.5)
+6. ⚠️ Content filtering (v1.6)
+7. ⚠️ Health checks (v1.2)
+
+**Nice-to-Have (Competitive Edge):**
+8. 💡 Distributed cache (v2.0) - Squid doesn't have this
+9. 💡 HTTP/3 support (v2.1) - Modern protocol
+10. 💡 eBPF optimizations (v2.1) - Ultra performance
+
+---
+
+### 📝 How to Contribute
+
+Want to help implement the roadmap?
+
+1. **Check [Issues](https://github.com/onixus/4ebur-net/issues)** tagged with `roadmap`
+2. **Comment on the issue** to claim it
+3. **Follow the [Contributing Guide](CONTRIBUTING.md)**
+4. **Submit a PR** with tests and documentation
+
+Priority areas for contributors:
+- 🔴 v1.2.0 Prometheus metrics
+- 🔴 v1.2.0 Health check endpoint
+- 🟠 v1.3.0 Disk cache implementation
+- 🟠 v1.4.0 ACL engine
+
+---
+
+**🎯 Goal:** Transform 4ebur-net into a modern, cloud-native alternative to Squid while maintaining Go's performance advantages and simplicity.
 
 ---
 
