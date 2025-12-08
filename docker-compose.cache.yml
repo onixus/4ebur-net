@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Redis Master - primary cache node
+  redis-master:
+    image: redis:7.2-alpine
+    container_name: redis-master
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-master-data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cache
+    restart: unless-stopped
+
+  # Redis Replica - read-only fallback
+  redis-replica:
+    image: redis:7.2-alpine
+    container_name: redis-replica
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-replica-data:/data
+    command: redis-server --slaveof redis-master 6379 --requirepass your_password --masterauth your_password
+    depends_on:
+      - redis-master
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cache
+    restart: unless-stopped
+
+  # Redis Sentinel - automatic failover
+  redis-sentinel:
+    image: redis:7.2-alpine
+    container_name: redis-sentinel
+    ports:
+      - "26379:26379"
+    volumes:
+      - ./config/sentinel.conf:/usr/local/etc/redis/sentinel.conf
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    depends_on:
+      - redis-master
+      - redis-replica
+    networks:
+      - cache
+    restart: unless-stopped
+
+  # 4ebur-net with Redis backend
+  proxy:
+    image: onixus/4ebur-net:latest
+    container_name: 4ebur-net-proxy
+    ports:
+      - "1488:1488"
+    environment:
+      - REDIS_ENABLED=true
+      - REDIS_ADDR=redis-master:6379
+      - REDIS_PASSWORD=your_password
+      - REDIS_DB=0
+      - CACHE_SIZE_MB=200
+      - CACHE_MAX_AGE=5m
+    depends_on:
+      - redis-master
+    networks:
+      - cache
+    restart: unless-stopped
+
+volumes:
+  redis-master-data:
+    driver: local
+  redis-replica-data:
+    driver: local
+
+networks:
+  cache:
+    driver: bridge

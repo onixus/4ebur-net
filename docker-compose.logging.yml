@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # 4ebur-net proxy with logging labels
+  proxy:
+    image: onixus/4ebur-net:latest
+    ports:
+      - "1488:1488"
+    environment:
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - VERSION=1.2.0
+    labels:
+      logging: "promtail"
+      logging_jobname: "4ebur-net"
+    depends_on:
+      - loki
+    networks:
+      - logging
+
+  # Promtail - log collector
+  promtail:
+    image: grafana/promtail:2.9.3
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - logging
+
+  # Loki - log storage and indexing
+  loki:
+    image: grafana/loki:2.9.3
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+      - ./config/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - logging
+
+  # Grafana - log visualization
+  grafana:
+    image: grafana/grafana:10.2.2
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    depends_on:
+      - loki
+    networks:
+      - logging
+
+volumes:
+  loki-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  logging:
+    driver: bridge
